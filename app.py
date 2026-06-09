@@ -1,14 +1,25 @@
 from fastapi import FastAPI
+# pyrefly: ignore [missing-import]
 from rank_bm25 import BM25Okapi
 from db import load_docs
+from datetime import datetime,timedelta
 
 
 # Simple rule engine
 def apply_rules(query):
     filters={}
+    query=query.lower()
 
-    if "legal" in query:
-        filters["domain"]="legal"
+    DOMAIN_KEYWORDS={
+        "tech":["machine learning","deep learning","cloud","edge ai","ai","cybersecurity"],
+        "legal":["law","legal","act","regulation","compliance"],
+        "business":["business","market","startup","funding","marketing"],
+        "health":["health","medical","disease","nutrition","exercise"]
+    }
+    for domain, keywords in DOMAIN_KEYWORDS.items():
+        if any(keyword in query for keyword in keywords):
+            filters["domain"] = domain
+            break
 
     if "verified" in query:
         filters["verified"]=True
@@ -29,6 +40,8 @@ def filter_docs(docs,filters):
     
     if "verified" in filters:
         results=[d for d in results if d["verified"]==True]
+    
+    datetime.now()-timedelta(days=180)
      
 
     return results
@@ -45,39 +58,93 @@ def bm25_search(docs,query):
 
     scores=bm25.get_scores(query.split())
     ranked=sorted(zip(docs,scores),key=lambda x:x[1],reverse=True)
-    return [r[0] for r in ranked]
+    return ranked
 
 # Explanation Layer 
-def explain(doc,filters):
+def explain(doc,filters,score):
     reasons=[]
 
-    if doc['domain']==filters.get("domain"):
-        reasons.append("Matched Domain Rule")
-
-    if doc["verified"]:
-        reasons.append("Verified by Authority")
-        
-
+    if filters.get("domain") and doc["domain"]==filters["domain"]:
+        reasons.append("Domain matched")
+    
+    if filters.get("verified") and doc["verified"]:
+        reasons.append("Verified by authority")
+    
+    if score>5:
+        reasons.append("High keyword relevance (BM25)")
+    
     #BM25 score - check if keywords in doc
     return  reasons
 
+# query parser for detect intent of query
+
+def parse_query(q):
+    query=q.lower()
+    result={
+        "domain":None,
+        "verified":False,
+        "keywords":query
+    }
+
+    if "tech" in query or "machine learning " in query:
+        result["domain"]="tech" 
+    
+    if "legal" in query:
+        result["domain"]="legal"
+
+    if "verified" in query:
+        result["verified"]=True
+
+    return result
+    
 # fast api
 
 app=FastAPI()
 
 @app.get("/search")
-def search(q:str):
-    filters=apply_rules(q)
+def search(q: str):
+    filters = apply_rules(q)
+    docs = load_docs()
+    filtered = filter_docs(docs, filters)
+    parsed=parse_query(q)
 
-    docs=load_docs()
+    ranked = bm25_search(filtered, q)
 
-    filtered=filter_docs(docs,filters)
-    ranked=bm25_search(filtered,q)
+    results = []
 
-    return ranked
-    #BM25
-    
+    for doc, score in ranked:
 
-    
-    
+        # 1. start with BM25
+        final_score = score
 
+        # 2. verified boost
+        if doc["verified"] and parsed["verified"]:
+            final_score += 2
+
+        #  3. domain match boost
+        if parsed["domain"] and doc["domain"] == parsed["domain"]:
+            final_score += 3
+
+        results.append({
+            "doc":doc,
+            "score":score,
+            "final_score":final_score,
+            
+        })
+
+        #  4. date boost (optional placeholder)
+        recent_doc = True  # later you implement real date logic
+        if recent_doc:
+            final_score += 1
+
+        results.append({
+            "doc": doc,
+            "bm25_score": float(score),
+            "final_score": float(final_score),
+            "why": explain(doc, filters, score)
+        })
+
+    # 🔥 IMPORTANT: sort by final_score
+    results = sorted(results, key=lambda x: x["final_score"], reverse=True)
+
+    return results
