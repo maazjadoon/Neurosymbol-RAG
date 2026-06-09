@@ -1,0 +1,162 @@
+[
+    {
+        "id": 1,
+        "title": "AI regulations 2025",
+        "content": "The Global AI Act, effective 2025, mandates explainable models and forbids subliminal targeting.",
+        "domain": "legal",
+        "verified": true,
+        "date": "2025-01-01"
+    },
+    {
+        "id": 2,
+        "title": "Data Privacy Law Update",
+        "content": "New privacy laws require companies to store user consent logs and allow data deletion requests.",
+        "domain": "legal",
+        "verified": true,
+        "date": "2025-02-10"
+    },
+    {
+        "id": 3,
+        "title": "Cybersecurity Compliance Rules",
+        "content": "Organizations must implement multi-factor authentication and encryption for sensitive data.",
+        "domain": "legal",
+        "verified": true,
+        "date": "2025-03-05"
+    },
+    {
+        "id": 4,
+        "title": "AI Ethics Guidelines",
+        "content": "Ethical AI systems should avoid bias, ensure fairness, and maintain transparency in decision making.",
+        "domain": "legal",
+        "verified": true,
+        "date": "2025-01-20"
+    },
+    {
+        "id": 5,
+        "title": "Healthcare Data Protection Act",
+        "content": "Patient data must be anonymized and protected under strict access control policies.",
+        "domain": "legal",
+        "verified": true,
+        "date": "2025-04-12"
+    },
+    {
+        "id": 6,
+        "title": "Machine Learning Basics",
+        "content": "Machine learning involves training models on data to make predictions without explicit programming.",
+        "domain": "tech",
+        "verified": true,
+        "date": "2024-11-15"
+    },
+    {
+        "id": 7,
+        "title": "Deep Learning Trends",
+        "content": "Deep learning models are improving in vision, speech, and language understanding tasks.",
+        "domain": "tech",
+        "verified": true,
+        "date": "2024-12-01"
+    },
+    {
+        "id": 8,
+        "title": "Transformer Architecture",
+        "content": "Transformers use self-attention mechanisms to process sequential data efficiently.",
+        "domain": "tech",
+        "verified": true,
+        "date": "2025-01-18"
+    },
+    {
+        "id": 9,
+        "title": "Cloud Computing Overview",
+        "content": "Cloud platforms provide scalable compute resources and storage over the internet.",
+        "domain": "tech",
+        "verified": true,
+        "date": "2025-02-25"
+    },
+    {
+        "id": 10,
+        "title": "Edge AI Systems",
+        "content": "Edge AI enables machine learning models to run directly on devices with low latency.",
+        "domain": "tech",
+        "verified": true,
+        "date": "2025-03-22"
+    },
+    {
+        "id": 11,
+        "title": "Startup Funding Guide",
+        "content": "Startups raise capital through seed funding, venture capital, and angel investors.",
+        "domain": "business",
+        "verified": true,
+        "date": "2024-10-10"
+    },
+    {
+        "id": 12,
+        "title": "Market Analysis Basics",
+        "content": "Market analysis involves studying competitors, demand, and customer behavior.",
+        "domain": "business",
+        "verified": true,
+        "date": "2025-01-05"
+    },
+    {
+        "id": 13,
+        "title": "E-commerce Growth Trends",
+        "content": "Online shopping is increasing due to digital payments and mobile apps.",
+        "domain": "business",
+        "verified": true,
+        "date": "2025-02-14"
+    },
+    {
+        "id": 14,
+        "title": "Business Risk Management",
+        "content": "Risk management includes identifying financial and operational risks in business.",
+        "domain": "business",
+        "verified": true,
+        "date": "2025-03-01"
+    },
+    {
+        "id": 15,
+        "title": "Digital Marketing Strategies",
+        "content": "SEO, social media marketing, and content creation are key digital strategies.",
+        "domain": "business",
+        "verified": true,
+        "date": "2025-04-01"
+    },
+    {
+        "id": 16,
+        "title": "AI in Healthcare",
+        "content": "AI helps in diagnosing diseases, predicting outcomes, and personalizing treatments.",
+        "domain": "health",
+        "verified": true,
+        "date": "2025-01-25"
+    },
+    {
+        "id": 17,
+        "title": "Mental Health Awareness",
+        "content": "Mental health includes emotional and psychological well-being of individuals.",
+        "domain": "health",
+        "verified": true,
+        "date": "2025-02-20"
+    },
+    {
+        "id": 18,
+        "title": "Nutrition Guidelines",
+        "content": "A balanced diet includes proteins, carbohydrates, vitamins, and minerals.",
+        "domain": "health",
+        "verified": true,
+        "date": "2025-03-10"
+    },
+    {
+        "id": 19,
+        "title": "Exercise and Fitness",
+        "content": "Regular exercise improves cardiovascular health and mental well-being.",
+        "domain": "health",
+        "verified": true,
+        "date": "2025-04-05"
+    },
+    {
+        "id": 20,
+        "title": "Disease Prevention Methods",
+        "content": "Vaccination, hygiene, and healthy lifestyle reduce risk of diseases.",
+        "domain": "health",
+        "verified": true,
+        "date": "2025-05-01"
+    }
+]
