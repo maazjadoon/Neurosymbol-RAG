@@ -8,7 +8,7 @@ import faiss
 import numpy as np
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import regex as re
+import re
 
 
 # Load Documents
@@ -28,9 +28,9 @@ model=SentenceTransformer(
 embeddings=model.encode(
     [doc["content"] for doc in docs]
 )
+embeddings = np.array(embeddings).astype("float32")
 
-index=faiss.IndexFlatL2(embeddings.shape[1])
-index.add(np.array(embeddings).astype("float32"))
+doc_embedding_map = {doc["id"]: embeddings[i] for i, doc in enumerate(docs)}
 
 
 
@@ -96,21 +96,23 @@ def bm25_search(docs,query):
     return ranked
 
 # Explanation Layer 
-def explain(doc,filters,score):
-    reasons=[]
+def explain(doc, filters, score, vector_score=0):
+    reasons = []
 
-    if filters.get("domain") and doc["domain"]==filters["domain"]:
+    if filters.get("domain") and doc["domain"] == filters["domain"]:
         reasons.append("Domain matched")
-    
+
     if filters.get("verified") and doc["verified"]:
         reasons.append("Verified by authority")
-    
-    if score>0.5:
-        reasons.append("High keyword relevance (BM25)")
-    
-    #BM25 score - check if keywords in doc
-    return  reasons
 
+    if score > 0.5:
+        reasons.append("High keyword relevance (BM25)")
+
+    # Tell the user when semantic similarity contributed to the ranking
+    if vector_score > 0.3:
+        reasons.append("Semantic similarity match")
+
+    return reasons
 
 
 
@@ -132,47 +134,45 @@ def search(q: str):
     # filters already has domain and verified — no need to parse twice
     parsed = {
         "domain": filters.get("domain", None),
-        "verified": filters.get("verified", False),
-        "keywords": q.lower()
+        "verified": filters.get("verified", False)
     }
+
+    
+
+    
+    # bm25
+    # Exit immediately before any expensive work if no docs passed filters
+    if not filtered:
+        return {"results": [], "message": "No documents matched your filters."}
 
     ranked = bm25_search(filtered, q)
 
-# Normalize BM25 scores to 0-1 range before fusion
+    # Normalize BM25 scores to 0-1 range before fusion
     if ranked:
         max_bm25 = max(score for _, score in ranked)
         if max_bm25 > 0:
             ranked = [(doc, score / max_bm25) for doc, score in ranked]
-
     results = []
 
     # creating vector retrieval
-
     query_embedding = model.encode([q], convert_to_numpy=True)
-    vector_scores={}
-    if filtered:
-        filtered_embeddings = model.encode([doc["content"] for doc in filtered])
-        filtered_embeddings = np.array(filtered_embeddings).astype("float32")
-        temp_index = faiss.IndexFlatL2(filtered_embeddings.shape[1])
-        temp_index.add(filtered_embeddings)
-    
-        # Get top 50
-        k = min(50, len(filtered))
-        distances, indices = temp_index.search(query_embedding, k)
+    vector_scores = {}
 
-        # Store vector scores for filtered docs
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx == -1: continue
-            doc_id = filtered[idx]["id"]
-            vector_scores[doc_id] = 1 / (1 + dist)
-    
+    # Look up pre-computed embeddings for only the filtered docs
+    filtered_embeddings = np.array([
+        doc_embedding_map[doc["id"]] for doc in filtered
+    ]).astype("float32")
 
-    
+    temp_index = faiss.IndexFlatL2(filtered_embeddings.shape[1])
+    temp_index.add(filtered_embeddings)
+
+    k = min(50, len(filtered))
+    distances, indices = temp_index.search(query_embedding, k)
+
     for dist, idx in zip(distances[0], indices[0]):
-        if idx == -1: continue
-        doc_id = id_map.get(idx)
-        if doc_id in filtered_ids:
-            vector_scores[doc_id] = 1 / (1 + dist)
+        doc_id = filtered[int(idx)]["id"]
+        vector_scores[doc_id] = 1 / (1 + dist)
+
 
 
     for doc, score in ranked:
@@ -185,18 +185,18 @@ def search(q: str):
         )
         # 2. verified boost
         if doc["verified"] and parsed["verified"]:
-            final_score += 0.2
+            final_score += 0.05
 
         #  3. domain match boost
         if parsed["domain"] and doc["domain"] == parsed["domain"]:
-            final_score += 0.3
+            final_score += 0.08
 
 
         #  4. date boost (optional placeholder)
         try:
             doc_date = datetime.fromisoformat(doc["date"])
             if doc_date >= datetime.now() - timedelta(days=180):
-                final_score += 0.1
+                final_score += 0.03
         except (KeyError, ValueError):
             pass
 
@@ -206,7 +206,7 @@ def search(q: str):
             "bm25_score": float(score),
             "vector_score": float(vector_score),
             "final_score": float(final_score),
-            "why": explain(doc, filters, score)
+            "why": explain(doc, filters, score, vector_score)  # pass vector_score
         })
 
     # 🔥 IMPORTANT: sort by final_score
