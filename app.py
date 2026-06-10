@@ -14,6 +14,9 @@ from fastapi.staticfiles import StaticFiles
 docs=load_docs()
 # creating embeddings using sentence_transformers
 
+id_map = {i: doc["id"] for i, doc in enumerate(docs)}
+doc_map = {i: doc for i, doc in enumerate(docs)}
+
 model=SentenceTransformer(
     "sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -31,7 +34,7 @@ index.add(np.array(embeddings).astype("float32"))
 
 
 # Simple rule engine
-def apply_rules(query):
+def apply_rules(query): # for detecting the domain
     filters={}
     query=query.lower()
 
@@ -111,7 +114,7 @@ def parse_query(q):
         "keywords":query
     }
 
-    if "tech" in query or "machine learning " in query:
+    if "tech" in query or "machine learning" in query:
         result["domain"]="tech" 
     
     if "legal" in query:
@@ -135,9 +138,10 @@ def favicon():
 
 @app.get("/search")
 def search(q: str):
-    filters = apply_rules(q)
-    docs = load_docs()
     filtered = filter_docs(docs, filters)
+    filtered_ids = set(doc["id"] for doc in filtered)
+    filters = apply_rules(q)
+    
     parsed=parse_query(q)
 
     ranked = bm25_search(filtered, q)
@@ -146,25 +150,26 @@ def search(q: str):
 
     # creating vector retrieval
 
-    query_embedding=model.encode([q])
-
+    query_embedding = model.encode([q], convert_to_numpy=True)
+    k=10
     distances,indices=index.search(
-        np.array(query_embedding).astype("float32"),
-        len(docs)
+        query_embedding,
+        k
     )
 
     #vector scores 
     vector_scores={}
 
-    for dist,idx in zip(distances[0],indices[0]):
-        vector_scores[idx]=1/(1+dist)
+    for dist, idx in zip(distances[0], indices[0]):
+        doc_id = id_map[idx]
+        if doc_id in filtered_ids:
+            vector_scores[doc_id] = 1 / (1 + dist)
 
-    results=[]
 
     for i,(doc,score) in enumerate(ranked):
         # 1. start with BM25
         bm25_score=score
-        vector_score = vector_scores.get(i, 0)
+        vector_score = vector_scores.get(doc["id"], 0)
         final_score = (
             bm25_score*0.6 +
             vector_score*0.4

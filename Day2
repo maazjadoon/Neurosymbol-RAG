@@ -1,0 +1,25 @@
+What I'd do if I were building this project
+
+Phase 1 (finish current work)
+
+Fix hybrid scoring
+Fix FAISS mapping
+Implement date filtering
+Add tests
+
+Phase 2
+
+Add PostgreSQL
+Store documents in DB
+CRUD endpoints
+
+Phase 3
+
+Add pgvector
+Move vector search into PostgreSQL
+Add reranking
+
+Phase 4
+
+Add an LLM answer generation layer
+Full RAG system
