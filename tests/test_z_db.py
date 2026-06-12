@@ -56,18 +56,19 @@ if "psycopg2" not in sys.modules:
     sys.modules["psycopg2"]        = fake_psycopg2
     sys.modules["psycopg2.extras"] = fake_extras
 
-# 4. sqlalchemy
-if "sqlalchemy" not in sys.modules:
-    fake_sa = types.ModuleType("sqlalchemy")
-    fake_sa.create_engine = MagicMock(return_value=MagicMock())
-    sys.modules["sqlalchemy"] = fake_sa
+# 4. sqlalchemy (Unconditionally stubbed temporarily for loading _real_db)
+orig_sa = sys.modules.get("sqlalchemy")
+orig_sa_orm = sys.modules.get("sqlalchemy.orm")
 
-if "sqlalchemy.orm" not in sys.modules:
-    fake_orm = types.ModuleType("sqlalchemy.orm")
-    fake_orm.sessionmaker     = MagicMock(return_value=MagicMock())
-    _mock_base_instance       = MagicMock()
-    fake_orm.declarative_base = MagicMock(return_value=_mock_base_instance)
-    sys.modules["sqlalchemy.orm"] = fake_orm
+fake_sa = types.ModuleType("sqlalchemy")
+fake_sa.create_engine = MagicMock(return_value=MagicMock())
+sys.modules["sqlalchemy"] = fake_sa
+
+fake_orm = types.ModuleType("sqlalchemy.orm")
+fake_orm.sessionmaker     = MagicMock(return_value=MagicMock())
+_mock_base_instance       = MagicMock()
+fake_orm.declarative_base = MagicMock(return_value=_mock_base_instance)
+sys.modules["sqlalchemy.orm"] = fake_orm
 
 # ---------------------------------------------------------------------------
 # Load db.py as '_real_db' without touching sys.modules['db'] (the stub).
@@ -79,6 +80,17 @@ real_db   = importlib.util.module_from_spec(_spec)
 # Temporarily register under its private name so relative deps resolve
 sys.modules["_real_db"] = real_db
 _spec.loader.exec_module(real_db)
+
+# Restore originals if they existed
+if orig_sa:
+    sys.modules["sqlalchemy"] = orig_sa
+else:
+    del sys.modules["sqlalchemy"]
+
+if orig_sa_orm:
+    sys.modules["sqlalchemy.orm"] = orig_sa_orm
+else:
+    del sys.modules["sqlalchemy.orm"]
 
 
 # ---------------------------------------------------------------------------
@@ -186,14 +198,16 @@ class TestCreateTable:
 
     def test_create_all_called_on_engine(self):
         fake_models = types.ModuleType("models")
+        fake_models_ns = types.ModuleType("models_neurosymbolic")
         # real_db.Base is the mock returned by declarative_base()
-        with patch.dict(sys.modules, {"models": fake_models}):
+        with patch.dict(sys.modules, {"models": fake_models, "models_neurosymbolic": fake_models_ns}):
             real_db.create_table()
         real_db.Base.metadata.create_all.assert_called_once_with(bind=real_db.engine)
 
     def test_create_table_returns_none(self):
         fake_models = types.ModuleType("models")
-        with patch.dict(sys.modules, {"models": fake_models}):
+        fake_models_ns = types.ModuleType("models_neurosymbolic")
+        with patch.dict(sys.modules, {"models": fake_models, "models_neurosymbolic": fake_models_ns}):
             result = real_db.create_table()
         assert result is None
 

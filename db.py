@@ -25,10 +25,21 @@ def load_docs():
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT id, title, content, domain, verified, year
+                SELECT id, title, content, domain, verified, year, embedding::text
                 FROM documents
             """)
-            return [dict(row) for row in cur.fetchall()]
+            results = []
+            for row in cur.fetchall():
+                d = dict(row)
+                if "embedding" in d:
+                    if d.get("embedding"):
+                        # Parse the string format '[0.1,0.2,...]' into a list of floats
+                        emb_str = d["embedding"].strip("[]")
+                        d["embedding"] = [float(x) for x in emb_str.split(",") if x]
+                    else:
+                        d["embedding"] = []
+                results.append(d)
+            return results
     finally:
         conn.close()
 
@@ -56,4 +67,5 @@ def get_db():
 
 def create_table():
     import models  # noqa: F401
+    import models_neurosymbolic  # noqa: F401
     Base.metadata.create_all(bind=engine)

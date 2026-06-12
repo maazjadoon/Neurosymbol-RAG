@@ -94,6 +94,31 @@
         <!-- Detected filter chips (rendered dynamically) -->
         <div class="filter-chips" id="filter-chips" role="status" aria-live="polite" aria-label="Detected filters"></div>
 
+        <!-- Neurosymbolic Configuration Controls -->
+        <div class="ns-config-controls">
+          <div class="ns-config-row">
+            <label class="ns-toggle-label">
+              <input type="checkbox" id="ns-toggle" onchange="toggleNeurosymbolic(this.checked)" />
+              <span class="ns-toggle-custom"></span>
+              <span class="ns-toggle-text">Enable Neurosymbolic RAG</span>
+            </label>
+            
+            <div class="ns-workflow-select-wrapper" id="ns-workflow-wrapper">
+              <label for="ns-workflow-select">Workflow:</label>
+              <select id="ns-workflow-select" class="ns-select" onchange="handleWorkflowChange(this.value)">
+                <option value="">None</option>
+              </select>
+            </div>
+            
+            <button type="button" class="btn-clear-session" id="btn-clear-session" onclick="clearActiveSession()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              <span>Clear Session</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Query hints -->
         <div class="search-hints">
           <span class="hint-label">Try:</span>
@@ -177,7 +202,66 @@
         <!-- Results list -->
         <div class="results-list" id="results-list" hidden>
           <div class="results-meta" id="results-meta"></div>
-          <ol class="result-cards" id="result-cards" aria-label="Search results"></ol>
+          <div class="search-results-layout" id="search-results-layout">
+            
+            <div class="results-left-col">
+              <!-- AI insights card -->
+              <div class="llm-insight-card" id="llm-insight-card" hidden>
+                <div class="llm-insight-header">
+                  <svg class="llm-insight-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                  </svg>
+                  <span class="llm-insight-title">AI Contextual Insights</span>
+                </div>
+                <div class="llm-insight-body" id="llm-insight-body"></div>
+              </div>
+              
+              <ol class="result-cards" id="result-cards" aria-label="Search results"></ol>
+            </div>
+
+            <aside class="neurosymbolic-dashboard" id="neurosymbolic-dashboard" hidden>
+              <div class="dashboard-section session-info">
+                <h3 class="dashboard-section-title">Session Context</h3>
+                <div class="session-meta">
+                  <div class="meta-row">
+                    <span class="meta-label">ID:</span>
+                    <span class="meta-value" id="session-id-display">—</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-label">Complexity:</span>
+                    <span class="meta-value" id="complexity-display">0.000</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-label">Modulation:</span>
+                    <span class="meta-value" id="modulation-display">0.000</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="dashboard-section symptoms-section">
+                <h3 class="dashboard-section-title">Session Concepts</h3>
+                <div class="symptom-badges" id="symptom-badges">
+                  <span class="no-features-text">No concepts detected yet.</span>
+                </div>
+              </div>
+              
+              <div class="dashboard-section path-section">
+                <h3 class="dashboard-section-title">KG Traversal Paths</h3>
+                <div class="path-tracer" id="path-tracer">
+                  <span class="no-paths-text">No path traversed yet.</span>
+                </div>
+              </div>
+              
+              <div class="dashboard-section workflow-section" id="dashboard-workflow-section" hidden>
+                <h3 class="dashboard-section-title">Procedural Workflow</h3>
+                <ul class="workflow-steps-list" id="workflow-steps-list">
+                  <!-- Steps rendered here -->
+                </ul>
+              </div>
+            </aside>
+          </div>
         </div>
 
       </section>

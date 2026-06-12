@@ -1049,3 +1049,482 @@ body {
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+
+/* ── Neurosymbolic Configuration Controls ────────────────────────────────── */
+.ns-config-controls {
+  margin-top: var(--space-4);
+  padding: var(--space-3.5) var(--space-4);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  animation: card-in 200ms ease both;
+}
+
+.ns-config-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.ns-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2.5);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+.ns-toggle-label input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ns-toggle-custom {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+  background-color: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ns-toggle-custom::after {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.ns-toggle-label input:checked + .ns-toggle-custom {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ns-toggle-label input:checked + .ns-toggle-custom::after {
+  transform: translateX(18px);
+  background-color: var(--color-text-inverse);
+}
+
+.ns-toggle-label input:focus-visible + .ns-toggle-custom {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ns-workflow-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2.5);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  transition: opacity var(--transition-fast);
+}
+
+.ns-select {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  padding: var(--space-1.5) var(--space-8) var(--space-1.5) var(--space-3);
+  outline: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a9bbf' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  -webkit-appearance: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ns-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-dim);
+}
+
+.btn-clear-session {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1.5);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1.5) var(--space-3);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-clear-session:hover {
+  background: var(--color-error-dim);
+  color: var(--color-error);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* ── 2-Column Search Layout Grid ─────────────────────────────────────────── */
+.search-results-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  align-items: start;
+  width: 100%;
+  transition: grid-template-columns var(--transition-base);
+}
+
+.search-results-layout.ns-active {
+  grid-template-columns: 1fr 340px;
+}
+
+@media (max-width: 900px) {
+  .search-results-layout.ns-active {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Neurosymbolic Dashboard Sidebar ─────────────────────────────────────── */
+.neurosymbolic-dashboard {
+  position: sticky;
+  top: var(--space-6);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: dashboard-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes dashboard-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dashboard-section:not(:last-child) {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.dashboard-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-accent);
+}
+
+.session-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meta-label {
+  color: var(--color-text-secondary);
+}
+
+.meta-value {
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+#session-id-display {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symptom-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.no-features-text,
+.no-paths-text {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.symptom-badge {
+  font-size: 0.75rem;
+  padding: 3px var(--space-2.5);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-weight: 500;
+}
+
+.path-tracer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.path-node-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.path-node-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+}
+
+.path-node-name {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.path-node-score {
+  font-family: var(--font-mono);
+  color: var(--color-score-vector);
+  font-size: 0.75rem;
+}
+
+.path-node-bar-track {
+  height: 4px;
+  background: var(--color-surface-3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.path-node-bar-fill {
+  height: 100%;
+  background: var(--color-score-vector);
+  border-radius: var(--radius-full);
+  transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Workflow Steps checklist ───────────────────────────────────────────── */
+.workflow-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2.5);
+  list-style: none;
+}
+
+.workflow-step-item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-2.5) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+
+.workflow-step-item.pending {
+  color: var(--color-text-muted);
+}
+
+.workflow-step-item.active {
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-text-primary);
+}
+
+.workflow-step-item.completed {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-text-secondary);
+}
+
+.step-status-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.workflow-step-item.pending .step-status-indicator {
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.workflow-step-item.active .step-status-indicator {
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+}
+
+.workflow-step-item.completed .step-status-indicator {
+  background: var(--color-success-dim);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
+}
+
+.step-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-dim);
+  animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0px rgba(245, 158, 11, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(245, 158, 11, 0);
+  }
+}
+
+.step-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.step-concept-badge {
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+.workflow-step-item.active .step-concept-badge {
+  color: var(--color-accent);
+}
+
+.workflow-step-item.completed .step-concept-badge {
+  color: var(--color-success);
+}
+
+/* ── Left Column Wrapper ────────────────────────────────────────────────── */
+.results-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ── LLM Insight Card ───────────────────────────────────────────────────── */
+.llm-insight-card {
+  background: var(--color-surface-1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.03);
+  animation: card-in 200ms ease both;
+  margin-bottom: var(--space-2);
+}
+
+.llm-insight-card:hover {
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 24px rgba(245, 158, 11, 0.06);
+}
+
+.llm-insight-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2.5);
+  margin-bottom: var(--space-4);
+  color: var(--color-accent);
+}
+
+.llm-insight-icon {
+  flex-shrink: 0;
+}
+
+.llm-insight-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.llm-insight-body {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+
+/* Markdown parsing output styles inside LLM insight body */
+.llm-insight-body h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.llm-insight-body h3:first-child {
+  margin-top: 0;
+}
+
+.llm-insight-body p {
+  margin-bottom: var(--space-3);
+}
+
+.llm-insight-body strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.llm-insight-body code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-1.5);
+  color: var(--color-score-vector);
+}

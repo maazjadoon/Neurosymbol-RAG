@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles            # For serving static file
 import psycopg2.extras                                 # For RealDictCursor (dict rows)
 import tempfile                                        # For temp PDF files on disk
 import re                                              # For tokenizing text
+import numpy as np                                     # For vector math
 
 # ── Load the AI model once at startup ────────────────────────────────────────
 # This model converts text into a list of 384 numbers (a vector/embedding).
@@ -158,11 +159,18 @@ def index():
 
 
 # ── SEARCH ENDPOINT ───────────────────────────────────────────────────────────
-# Main search route. Combines BM25 + pgvector into a fused ranked result.
-# Usage: GET /search?q=machine+learning
+# Main search route. Combines BM25 + pgvector + KG PageRank into a fused ranked result.
+# Usage: GET /search?q=machine+learning&session_id=s1&workflow=PHQ-9
 @app.get("/search")
-def search(q: str):
-    # Step 1: Extract filters from the query text
+def search(
+    q: str,
+    session_id: str = None,
+    workflow: str = None,
+    alpha: float = 0.6,
+    k: float = 0.5,
+    beta: float = 0.2
+):
+    # Step 1: Extract filters from the query text using rules engine
     filters = apply_rules(q)
     parsed  = {
         "domain":   filters.get("domain"),
@@ -174,47 +182,249 @@ def search(q: str):
     filtered = filter_docs(docs, filters)
 
     if not filtered:
-        return {"results": [], "message": "No documents matched your filters."}
+        if session_id or workflow:
+            return {
+                "results": [], 
+                "message": "No documents matched your filters.",
+                "llm_answer": "No documents were matched, so no context is available to generate an answer.",
+                "neurosymbolic": {
+                    "session_id": session_id,
+                    "accumulated_features": [],
+                    "complexity": 0.0,
+                    "modulation_strength": 0.0,
+                    "traversed_nodes": [],
+                    "pagerank_scores": {}
+                }
+            }
+        else:
+            return {"results": [], "message": "No documents matched your filters."}
 
-    # Step 3: BM25 keyword search on filtered docs
-    ranked = bm25_search(filtered, q)
+    # Generate base query embedding vector
+    query_embedding = model.encode([q], convert_to_numpy=True)[0].tolist()
 
-    # Step 4: Semantic vector search using pgvector
-    query_embedding = model.encode([q], convert_to_numpy=True)[0]
-    filtered_ids    = {d["id"] for d in filtered}  # set of IDs for SQL ANY()
-    vector_scores   = vector_search_pg(query_embedding, filtered_ids)
+    # ──── Standard Search Path (Fast, No session/workflow active) ────
+    if not session_id and not workflow:
+        filtered_ids = {d["id"] for d in filtered}
+        # Run original database-level pgvector similarity search
+        vector_scores = vector_search_pg(np.array(query_embedding), filtered_ids)
+        ranked = bm25_search(filtered, q)
+        
+        results = []
+        current_year = datetime.now().year
+        for doc, bm25_score in ranked:
+            vscore = vector_scores.get(doc["id"], 0.0)
+            final_score = (bm25_score * 0.6) + (vscore * 0.4)
 
-    # Step 5: Fuse scores and apply boosts
-    results = []
-    current_year = datetime.now().year
-    for doc, bm25_score in ranked:
-        vscore = vector_scores.get(doc["id"], 0)
+            # Apply boosts
+            if doc["verified"] and parsed["verified"]:
+                final_score += 0.05
+            if parsed["domain"] and doc["domain"] == parsed["domain"]:
+                final_score += 0.08
+            if doc.get("year") and doc["year"] >= current_year - 1:
+                final_score += 0.03
 
-        # Weighted fusion: BM25 handles exact keywords, vectors handle meaning
-        final_score = (bm25_score * 0.6) + (vscore * 0.4)
+            results.append({
+                "doc":          doc,
+                "bm25_score":   float(bm25_score),
+                "vector_score": float(vscore),
+                "final_score":  float(final_score),
+                "why":          explain(doc, filters, bm25_score, vscore)
+            })
 
-        # Boost verified docs when user asked for verified
-        if doc["verified"] and parsed["verified"]:
-            final_score += 0.05
+        return sorted(results, key=lambda x: x["final_score"], reverse=True)
 
-        # Boost docs that match the detected domain
-        if parsed["domain"] and doc["domain"] == parsed["domain"]:
-            final_score += 0.08
+    # ──── Neurosymbolic Search Path (MAR + KG-Path + Proknow-RAG) ────
+    from db import SessionLocal
+    import neurosymbolic_engine as ns_engine
+    from models_neurosymbolic import KGNode, DocumentKGMapping
 
-        # Boost recent documents (within last year)
-        if doc.get("year") and doc["year"] >= current_year - 1:
-            final_score += 0.03
+    db = SessionLocal()
+    try:
+        # Step 3: Map query semantics to initial KG nodes
+        mapped_nodes = ns_engine.map_query_to_nodes(query_embedding, db, threshold=0.4, limit=5)
+        # Also map nodes whose names are directly in the query text (keyword fallback)
+        q_lower = q.lower()
+        all_nodes = db.query(KGNode).all()
+        for node in all_nodes:
+            if node.name.lower() in q_lower and node not in mapped_nodes:
+                mapped_nodes.append(node)
 
-        results.append({
-            "doc":          doc,
-            "bm25_score":   float(bm25_score),
-            "vector_score": float(vscore),
-            "final_score":  float(final_score),
-            "why":          explain(doc, filters, bm25_score, vscore)
-        })
+        # Step 4: MAR - Feature Accumulation and Query Vector Modulation
+        accumulated_nodes = mapped_nodes
+        complexity = 0.0
+        modulation_strength = 0.0
+        if session_id:
+            accumulated_nodes = ns_engine.accumulate_features(session_id, mapped_nodes, db)
+            complexity = ns_engine.calculate_complexity(accumulated_nodes, db)
+            modulation_strength = ns_engine.calculate_modulation_strength(complexity, k=k)
+            # Fetch embeddings of accumulated concepts
+            concept_embeddings = [n.embedding for n in accumulated_nodes if n.embedding is not None]
+            modulated_query_vector = ns_engine.modulate_vector(query_embedding, concept_embeddings, modulation_strength)
+        else:
+            modulated_query_vector = query_embedding
 
-    # Sort by final fused score, highest first
-    return sorted(results, key=lambda x: x["final_score"], reverse=True)
+        # Step 5: KG-Path BFS Traversal
+        traversed_nodes = ns_engine.traverse_kg_bfs(mapped_nodes, db, hops=2)
+        traversed_node_ids = [n.id for n in traversed_nodes]
+        query_node_ids = [n.id for n in mapped_nodes]
+
+        # Step 6: Personalized PageRank scoring
+        ppr_scores = ns_engine.calculate_pagerank_scores(db, query_node_ids, traversed_node_ids, iterations=5, damping=0.85)
+
+        # Step 7: Document Modulation & Scoring
+        filtered_ids = {d["id"] for d in filtered}
+        mappings = db.query(DocumentKGMapping).filter(DocumentKGMapping.document_id.in_filtered_ids if hasattr(DocumentKGMapping.document_id, 'in_filtered_ids') else DocumentKGMapping.document_id.in_(filtered_ids)).all()
+        
+        doc_to_nodes = {}
+        for m in mappings:
+            if m.document_id not in doc_to_nodes:
+                doc_to_nodes[m.document_id] = []
+            doc_to_nodes[m.document_id].append(m.node_id)
+
+        # Build BM25 index on filtered documents
+        bm25 = BM25Okapi([tokenize(d["content"]) for d in filtered])
+        bm25_scores_raw = bm25.get_scores(tokenize(q))
+        
+        max_bm25 = max(bm25_scores_raw) if len(bm25_scores_raw) > 0 else 1.0
+        bm25_scores = [score / max_bm25 if max_bm25 > 0 else 0.0 for score in bm25_scores_raw]
+
+        results = []
+        for i, doc in enumerate(filtered):
+            bm25_score = bm25_scores[i]
+            mapped_node_ids = doc_to_nodes.get(doc["id"], [])
+            
+            # Document Modulation
+            if mapped_node_ids and beta > 0.0:
+                doc_kg_nodes = db.query(KGNode).filter(KGNode.id.in_(mapped_node_ids)).all()
+                concept_embeddings_doc = [n.embedding for n in doc_kg_nodes if n.embedding is not None]
+                modulated_doc_vector = ns_engine.modulate_vector(doc["embedding"], concept_embeddings_doc, beta)
+            else:
+                modulated_doc_vector = doc["embedding"]
+
+            # Cosine similarity between modulated vectors
+            vscore = 0.0
+            if modulated_doc_vector and modulated_query_vector:
+                vscore = float(np.dot(modulated_query_vector, modulated_doc_vector))
+                vscore = max(0.0, min(1.0, vscore))
+
+            # PageRank score (max probability mapping)
+            doc_pr_sum = sum(ppr_scores.get(node_id, 0.0) for node_id in mapped_node_ids)
+            doc_pr_score = min(1.0, doc_pr_sum)
+
+            # Score fusion (0.4 * BM25 + 0.3 * Modulated Vector + 0.3 * PageRank)
+            final_score = (bm25_score * 0.4) + (vscore * 0.3) + (doc_pr_score * 0.3)
+
+            # Apply boosts
+            if doc["verified"] and parsed["verified"]:
+                final_score += 0.05
+            if parsed["domain"] and doc["domain"] == parsed["domain"]:
+                final_score += 0.08
+            current_year = datetime.now().year
+            if doc.get("year") and doc["year"] >= current_year - 1:
+                final_score += 0.03
+
+            results.append({
+                "doc":          doc,
+                "bm25_score":   float(bm25_score),
+                "vector_score": float(vscore),
+                "final_score":  float(final_score),
+                "why":          explain(doc, filters, bm25_score, vscore)
+            })
+
+        # Sort by final score
+        results = sorted(results, key=lambda x: x["final_score"], reverse=True)
+
+        # Step 8: Proknow Sequencing
+        if workflow:
+            results = ns_engine.reorder_by_workflow(results, db, workflow)
+
+        # Build PageRank scores by name for display
+        pagerank_names = {}
+        for node_id, pr_val in ppr_scores.items():
+            node_obj = db.query(KGNode).filter(KGNode.id == node_id).first()
+            if node_obj:
+                pagerank_names[node_obj.name] = float(pr_val)
+
+        # Step 9: LLM Generation Step
+        import os
+        import llm_engine
+        api_key = os.getenv("GEMINI_API_KEY")
+        accumulated_names = [n.name for n in accumulated_nodes]
+        
+        # Build prompt from retrieved guidelines
+        top_docs_content = ""
+        for r in results[:3]:
+            top_docs_content += f"\nDocument: {r['doc']['title']}\nContent: {r['doc']['content']}\n"
+            
+        prompt = (
+            f"You are a helpful expert system. Answer the User Query based on the retrieved documents and session context.\n\n"
+            f"[Session Context]\n"
+            f"Active Workflow: {workflow or 'None'}\n"
+            f"Accumulated Concepts: {', '.join(accumulated_names) if accumulated_names else 'None'}\n"
+            f"Context Complexity: {complexity:.3f}\n\n"
+            f"[Retrieved Context Documents]\n"
+            f"{top_docs_content}\n"
+            f"[User Query]\n"
+            f"{q}\n\n"
+            f"Generate a clear, helpful, and context-grounded response. If the context is clinical, write a professional assessment and next step recommendation. If the context is DevOps software release, format a release checklist plan. Use markdown syntax."
+        )
+        
+        if api_key:
+            llm_answer = llm_engine.generate_llm_response(prompt, api_key)
+        else:
+            llm_answer = llm_engine.generate_mock_response(q, results[:3], accumulated_names, workflow)
+
+        return {
+            "results": results,
+            "llm_answer": llm_answer,
+            "neurosymbolic": {
+                "session_id": session_id,
+                "accumulated_features": accumulated_names,
+                "complexity": float(complexity),
+                "modulation_strength": float(modulation_strength),
+                "traversed_nodes": [n.name for n in traversed_nodes],
+                "pagerank_scores": pagerank_names
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/seed-neurosymbolic")
+def seed_neurosymbolic_route():
+    from seed_neurosymbolic import seed_data
+    seed_data()
+    return {"message": "Database seeded successfully with neurosymbolic guidelines"}
+
+
+@app.post("/clear-session")
+def clear_session_route(session_id: str):
+    import neurosymbolic_engine as ns_engine
+    ns_engine.clear_session(session_id)
+    return {"message": f"Session '{session_id}' cleared"}
+
+
+@app.get("/workflows")
+def get_workflows_route():
+    from db import SessionLocal
+    from models_neurosymbolic import Workflow, WorkflowStep, KGNode
+    db = SessionLocal()
+    try:
+        workflows = db.query(Workflow).all()
+        res = {}
+        for wf in workflows:
+            steps = db.query(WorkflowStep).filter(WorkflowStep.workflow_id == wf.id).order_by(WorkflowStep.sequence).all()
+            res[wf.name] = []
+            for step in steps:
+                node = db.query(KGNode).filter(KGNode.id == step.concept_id).first()
+                res[wf.name].append({
+                    "seq": step.sequence,
+                    "title": step.title,
+                    "concept": node.name if node else ""
+                })
+        return res
+    finally:
+        db.close()
 
 
 # ── PDF INGEST ENDPOINT ───────────────────────────────────────────────────────

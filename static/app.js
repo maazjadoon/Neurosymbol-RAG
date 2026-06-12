@@ -15,6 +15,138 @@ let lastQuery = '';
 let selectedFile = null;
 let verifiedValue = false;
 
+// Neurosymbolic State
+let nsEnabled = false;
+let activeWorkflow = '';
+let sessionId = '';
+
+let WORKFLOWS = {};
+
+async function fetchWorkflows() {
+  try {
+    const resp = await fetch(`${API_BASE}/workflows`);
+    if (resp.ok) {
+      WORKFLOWS = await resp.json();
+      populateWorkflowSelect();
+    }
+  } catch (err) {
+    console.error("Failed to fetch workflows from backend:", err);
+  }
+}
+
+function populateWorkflowSelect() {
+  const select = $('ns-workflow-select');
+  if (!select) return;
+  
+  // Keep the first "None" option
+  select.innerHTML = '<option value="">None</option>';
+  
+  for (const wfName of Object.keys(WORKFLOWS)) {
+    const opt = document.createElement('option');
+    opt.value = wfName;
+    const displayName = wfName.replace(/_/g, ' ');
+    opt.textContent = displayName;
+    select.appendChild(opt);
+  }
+}
+
+function parseMarkdown(text) {
+  if (!text) return '';
+  // Simple markdown parser converting headers, bold, inline code, and lists to HTML safely.
+  // We escape HTML first to prevent XSS.
+  let escaped = escapeHtml(text);
+  
+  // Replace headings: ### text -> <h3>text</h3>
+  escaped = escaped.replace(/###\s+(.*?)(<br\s*\/?>|$)/g, '<h3>$1</h3>$2');
+  
+  // Replace bold: **text** -> <strong>text</strong>
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Replace lists: 1. text -> list item
+  escaped = escaped.replace(/(\d+)\.\s+(.*?)(<br\s*\/?>|$)/g, '<div class="md-list-item"><strong>$1.</strong> $2</div>$3');
+  
+  // Replace inline code: `text` -> <code>text</code>
+  escaped = escaped.replace(/`(.*?)`/g, '<code>$1</code>');
+  
+  // Replace paragraph break
+  escaped = escaped.replace(/\n\n/g, '<br/><br/>');
+  escaped = escaped.replace(/\n/g, '<br/>');
+  
+  return escaped;
+}
+
+function toggleNeurosymbolic(enabled) {
+  nsEnabled = enabled;
+  const wrapper = $('ns-workflow-wrapper');
+  if (enabled) {
+    if (wrapper) {
+      wrapper.style.opacity = '1';
+      wrapper.style.pointerEvents = 'auto';
+    }
+    if (!sessionId) {
+      sessionId = 'sess_' + Math.random().toString(36).substring(2, 11);
+    }
+    show('btn-clear-session');
+  } else {
+    if (wrapper) {
+      wrapper.style.opacity = '0.5';
+      wrapper.style.pointerEvents = 'none';
+    }
+    hide('btn-clear-session');
+  }
+}
+
+function handleWorkflowChange(val) {
+  activeWorkflow = val;
+}
+
+async function clearActiveSession() {
+  if (!sessionId) return;
+  try {
+    const submitBtn = $('btn-clear-session');
+    if (submitBtn) submitBtn.disabled = true;
+    
+    const resp = await fetch(`${API_BASE}/clear-session?session_id=${encodeURIComponent(sessionId)}`, {
+      method: 'POST'
+    });
+    if (resp.ok) {
+      console.log(`Session ${sessionId} cleared`);
+    }
+  } catch (err) {
+    console.error('Failed to clear session on backend', err);
+  } finally {
+    const submitBtn = $('btn-clear-session');
+    if (submitBtn) submitBtn.disabled = false;
+  }
+  
+  // Generate a new session ID
+  sessionId = 'sess_' + Math.random().toString(36).substring(2, 11);
+  
+  // Clear UI displays
+  const badgesContainer = $('symptom-badges');
+  if (badgesContainer) {
+    badgesContainer.innerHTML = '<span class="no-features-text">No concepts detected yet.</span>';
+  }
+  const pathsContainer = $('path-tracer');
+  if (pathsContainer) {
+    pathsContainer.innerHTML = '<span class="no-paths-text">No path traversed yet.</span>';
+  }
+  $('complexity-display').textContent = '0.000';
+  $('modulation-display').textContent = '0.000';
+  
+  const insightCard = $('llm-insight-card');
+  if (insightCard) {
+    insightCard.hidden = true;
+    insightCard.style.display = 'none';
+    $('llm-insight-body').innerHTML = '';
+  }
+  
+  // Re-run search if there was a previous search
+  if (lastQuery) {
+    handleSearch(null);
+  }
+}
+
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 function $(id) { return document.getElementById(id); }
 
@@ -187,7 +319,15 @@ async function handleSearch(event) {
   submitBtn.disabled = true;
 
   try {
-    const resp = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+    let url = `${API_BASE}/search?q=${encodeURIComponent(q)}`;
+    if (nsEnabled && sessionId) {
+      url += `&session_id=${encodeURIComponent(sessionId)}`;
+    }
+    if (nsEnabled && activeWorkflow) {
+      url += `&workflow=${encodeURIComponent(activeWorkflow)}`;
+    }
+    
+    const resp = await fetch(url);
 
     if (!resp.ok) {
       throw new Error(`Server returned ${resp.status}`);
@@ -218,9 +358,175 @@ function renderResults(data, query) {
   //   Object with message (no results)   → {results: [], message: "..."}
   const isList    = Array.isArray(data);
   const results   = isList ? data : (data.results || []);
+  const nsData    = isList ? null : data.neurosymbolic;
+  const llmAnswer = isList ? null : data.llm_answer;
+
+  const dashboard = $('neurosymbolic-dashboard');
+  const layout = $('search-results-layout');
+  const insightCard = $('llm-insight-card');
+
+  if (llmAnswer) {
+    if (insightCard) {
+      insightCard.hidden = false;
+      insightCard.style.display = '';
+      $('llm-insight-body').innerHTML = parseMarkdown(llmAnswer);
+    }
+  } else {
+    if (insightCard) {
+      insightCard.hidden = true;
+      insightCard.style.display = 'none';
+      $('llm-insight-body').innerHTML = '';
+    }
+  }
+
+  if (nsData) {
+    // 1. Update session details
+    $('session-id-display').textContent = nsData.session_id || '—';
+    $('session-id-display').title = nsData.session_id || '';
+    $('complexity-display').textContent = fmt(nsData.complexity);
+    $('modulation-display').textContent = fmt(nsData.modulation_strength);
+
+    // 2. Render accumulated features (symptom badges)
+    const symptomBadgesContainer = $('symptom-badges');
+    symptomBadgesContainer.innerHTML = '';
+    const features = nsData.accumulated_features || [];
+    if (features.length === 0) {
+      symptomBadgesContainer.innerHTML = '<span class="no-features-text">No concepts detected yet.</span>';
+    } else {
+      features.forEach(f => {
+        const span = document.createElement('span');
+        span.className = 'symptom-badge';
+        span.textContent = f;
+        symptomBadgesContainer.appendChild(span);
+      });
+    }
+
+    // 3. Render traversed nodes with PageRank
+    const pathTracerContainer = $('path-tracer');
+    pathTracerContainer.innerHTML = '';
+    const traversed = nsData.traversed_nodes || [];
+    const prScores = nsData.pagerank_scores || {};
+    
+    // Sort traversed nodes by PR score descending
+    const sortedNodes = [...traversed].sort((a, b) => (prScores[b] || 0) - (prScores[a] || 0));
+
+    if (sortedNodes.length === 0) {
+      pathTracerContainer.innerHTML = '<span class="no-paths-text">No path traversed yet.</span>';
+    } else {
+      sortedNodes.forEach(node => {
+        const score = prScores[node] || 0;
+        const percentage = pct(score);
+        
+        const nodeRow = document.createElement('div');
+        nodeRow.className = 'path-node-row';
+        nodeRow.innerHTML = `
+          <div class="path-node-info">
+            <span class="path-node-name">${escapeHtml(node)}</span>
+            <span class="path-node-score">${fmt(score)}</span>
+          </div>
+          <div class="path-node-bar-track">
+            <div class="path-node-bar-fill" style="width: ${percentage}%"></div>
+          </div>
+        `;
+        pathTracerContainer.appendChild(nodeRow);
+      });
+    }
+
+    // 4. Render clinical workflow checklist if active
+    const workflowSection = $('dashboard-workflow-section');
+    const stepsList = $('workflow-steps-list');
+    
+    if (activeWorkflow && WORKFLOWS[activeWorkflow]) {
+      show('dashboard-workflow-section');
+      stepsList.innerHTML = '';
+      
+      const steps = WORKFLOWS[activeWorkflow];
+      
+      // Find the earliest step matched by the documents in results
+      let minDocStep = 999;
+      results.forEach(item => {
+        if (item.workflow_step !== undefined && item.workflow_step < minDocStep) {
+          minDocStep = item.workflow_step;
+        }
+      });
+      
+      steps.forEach(step => {
+        const isCompleted = features.includes(step.concept);
+        
+        let isActive = false;
+        if (minDocStep !== 999) {
+          isActive = step.seq === minDocStep;
+        } else {
+          // Find first incomplete step
+          const firstIncomplete = steps.find(s => !features.includes(s.concept));
+          isActive = firstIncomplete && step.seq === firstIncomplete.seq;
+        }
+        
+        const li = document.createElement('li');
+        
+        let statusClass = 'pending';
+        let statusIcon = `<span class="step-number">${step.seq}</span>`;
+        
+        if (isCompleted) {
+          statusClass = 'completed';
+          statusIcon = `<svg class="step-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>`;
+        } else if (isActive) {
+          statusClass = 'active';
+          statusIcon = `<div class="step-pulse"></div>`;
+        }
+        
+        li.className = `workflow-step-item ${statusClass}`;
+        li.innerHTML = `
+          <div class="step-status-indicator">${statusIcon}</div>
+          <div class="step-content">
+            <span class="step-title">${escapeHtml(step.title)}</span>
+            <span class="step-concept-badge">${escapeHtml(step.concept)}</span>
+          </div>
+        `;
+        stepsList.appendChild(li);
+      });
+    } else {
+      hide('dashboard-workflow-section');
+    }
+
+    // Show dashboard
+    if (dashboard) {
+      dashboard.hidden = false;
+      dashboard.style.display = '';
+    }
+    if (layout) {
+      layout.classList.add('ns-active');
+    }
+  } else {
+    // Hide dashboard
+    if (dashboard) {
+      dashboard.hidden = true;
+      dashboard.style.display = 'none';
+    }
+    if (layout) {
+      layout.classList.remove('ns-active');
+    }
+  }
 
   if (results.length === 0) {
-    setSearchState('state-empty');
+    if (nsData) {
+      $('results-meta').innerHTML = `<span>0 results for "<strong>${escapeHtml(query)}</strong>"</span>`;
+      $('result-cards').innerHTML = `<li class="state-empty" style="padding: var(--space-8) 0; grid-column: span 2; text-align: center; list-style: none;">
+        <div class="empty-icon" aria-hidden="true" style="margin-bottom: var(--space-2); color: var(--color-text-muted);">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <p class="state-body" style="margin-bottom: 0;">No documents matched your filters. Try broadening your query.</p>
+      </li>`;
+      setSearchState('results-list');
+      show('results-list');
+    } else {
+      setSearchState('state-empty');
+    }
     return;
   }
 
@@ -479,3 +785,5 @@ document.addEventListener('keydown', function (e) {
 
 /* ── Boot ────────────────────────────────────────────────────────────────── */
 checkApiStatus();
+toggleNeurosymbolic(false);
+fetchWorkflows();

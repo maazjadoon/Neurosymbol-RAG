@@ -28,9 +28,12 @@ def _ensure_db_stub_in_sys_modules():
     if "db" not in sys.modules or not isinstance(sys.modules["db"].get_connection
                                                   if hasattr(sys.modules["db"], "get_connection")
                                                   else None, MagicMock):
+        from sqlalchemy.orm import declarative_base, sessionmaker
         fake_db = types.ModuleType("db")
         fake_db.load_docs      = MagicMock(return_value=[])
         fake_db.get_connection = MagicMock()
+        fake_db.Base           = declarative_base()
+        fake_db.SessionLocal   = sessionmaker()
         sys.modules["db"] = fake_db
 
     stub = sys.modules["db"]
