@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neurosymbol RAG — Research Intelligence</title>
+  <meta name="description" content="Hybrid BM25 + semantic vector search over your document corpus. Upload PDFs and retrieve with precision." />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css?v=2" />
+</head>
+<body>
+
+<!-- ── App Shell ───────────────────────────────────────────────────── -->
+<div class="app-shell" id="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">Neurosymbol</span>
+        <span class="brand-tagline">RAG Research</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" id="nav-search" onclick="switchTab('search')" aria-selected="true" role="tab" aria-controls="panel-search">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        Search
+      </button>
+      <button class="nav-item" id="nav-ingest" onclick="switchTab('ingest')" aria-selected="false" role="tab" aria-controls="panel-ingest">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Ingest PDF
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-badge" id="api-status" title="API connection status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-label">Connecting…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ── Search Panel ─────────────────────────────────────────── -->
+    <div class="panel" id="panel-search" role="tabpanel" aria-labelledby="nav-search">
+
+      <header class="panel-header">
+        <h1 class="panel-title">Search Documents</h1>
+        <p class="panel-subtitle">Hybrid BM25 + semantic search across your corpus. Query naturally — filters are detected automatically.</p>
+      </header>
+
+      <!-- Search form -->
+      <form class="search-form" id="search-form" onsubmit="handleSearch(event)" novalidate>
+        <div class="search-input-wrapper">
+          <svg class="search-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            type="search"
+            id="search-input"
+            class="search-input"
+            placeholder="Ask anything — e.g. "verified AI papers from last 6 months""
+            aria-label="Search query"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit" class="search-button" aria-label="Submit search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            <span>Search</span>
+          </button>
+        </div>
+
+        <!-- Detected filter chips (rendered dynamically) -->
+        <div class="filter-chips" id="filter-chips" role="status" aria-live="polite" aria-label="Detected filters"></div>
+
+        <!-- Neurosymbolic Configuration Controls -->
+        <div class="ns-config-controls">
+          <div class="ns-config-row">
+            <label class="ns-toggle-label">
+              <input type="checkbox" id="ns-toggle" onchange="toggleNeurosymbolic(this.checked)" />
+              <span class="ns-toggle-custom"></span>
+              <span class="ns-toggle-text">Enable Neurosymbolic RAG</span>
+            </label>
+            
+            <div class="ns-workflow-select-wrapper" id="ns-workflow-wrapper">
+              <label for="ns-workflow-select">Workflow:</label>
+              <select id="ns-workflow-select" class="ns-select" onchange="handleWorkflowChange(this.value)">
+                <option value="">None</option>
+              </select>
+            </div>
+            
+            <button type="button" class="btn-clear-session" id="btn-clear-session" onclick="clearActiveSession()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              <span>Clear Session</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Query hints -->
+        <div class="search-hints">
+          <span class="hint-label">Try:</span>
+          <button type="button" class="hint-chip" onclick="setQuery('verified AI research papers')">verified AI research</button>
+          <button type="button" class="hint-chip" onclick="setQuery('legal regulation compliance')">legal compliance</button>
+          <button type="button" class="hint-chip" onclick="setQuery('health nutrition exercise last 6 months')">recent health docs</button>
+          <button type="button" class="hint-chip" onclick="setQuery('machine learning deep learning')">machine learning</button>
+        </div>
+      </form>
+
+      <!-- Results area -->
+      <section class="results-section" id="results-section" aria-live="polite" aria-label="Search results">
+
+        <!-- Initial idle state -->
+        <div class="state-idle" id="state-idle">
+          <div class="idle-illustration" aria-hidden="true">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" opacity=".2" fill="currentColor" stroke="none"/>
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </div>
+          <h2 class="state-title">Ready to search</h2>
+          <p class="state-body">Type a query above. Filters like domain, verified status, and date range are auto-detected from natural language.</p>
+        </div>
+
+        <!-- Loading skeletons -->
+        <div class="state-loading" id="state-loading" hidden aria-busy="true" aria-label="Searching…">
+          <div class="skeleton-card" aria-hidden="true">
+            <div class="skeleton-header">
+              <div class="skeleton-line skeleton-title"></div>
+              <div class="skeleton-badges"><div class="skeleton-badge"></div><div class="skeleton-badge"></div></div>
+            </div>
+            <div class="skeleton-line skeleton-body"></div>
+            <div class="skeleton-line skeleton-body short"></div>
+            <div class="skeleton-scores"><div class="skeleton-score-bar"></div></div>
+          </div>
+          <div class="skeleton-card" aria-hidden="true">
+            <div class="skeleton-header">
+              <div class="skeleton-line skeleton-title med"></div>
+              <div class="skeleton-badges"><div class="skeleton-badge"></div></div>
+            </div>
+            <div class="skeleton-line skeleton-body"></div>
+            <div class="skeleton-line skeleton-body shorter"></div>
+            <div class="skeleton-scores"><div class="skeleton-score-bar"></div></div>
+          </div>
+          <div class="skeleton-card" aria-hidden="true">
+            <div class="skeleton-header">
+              <div class="skeleton-line skeleton-title long"></div>
+              <div class="skeleton-badges"><div class="skeleton-badge"></div><div class="skeleton-badge"></div></div>
+            </div>
+            <div class="skeleton-line skeleton-body"></div>
+            <div class="skeleton-scores"><div class="skeleton-score-bar"></div></div>
+          </div>
+        </div>
+
+        <!-- Error state -->
+        <div class="state-error" id="state-error" hidden role="alert">
+          <div class="error-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h2 class="state-title">Search failed</h2>
+          <p class="state-body" id="error-message">Could not connect to the API. Make sure the server is running.</p>
+          <button class="btn-secondary" onclick="retryLastSearch()">Try again</button>
+        </div>
+
+        <!-- Empty state -->
+        <div class="state-empty" id="state-empty" hidden role="status">
+          <div class="empty-icon" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="9" y1="13" x2="15" y2="13"/>
+            </svg>
+          </div>
+          <h2 class="state-title">No documents matched</h2>
+          <p class="state-body">Try broadening your query or <button class="inline-link" onclick="switchTab('ingest')">ingest more documents</button> to expand your corpus.</p>
+        </div>
+
+        <!-- Results list -->
+        <div class="results-list" id="results-list" hidden>
+          <div class="results-meta" id="results-meta"></div>
+          <div class="search-results-layout" id="search-results-layout">
+            
+            <div class="results-left-col">
+              <!-- AI insights card -->
+              <div class="llm-insight-card" id="llm-insight-card" hidden>
+                <div class="llm-insight-header">
+                  <svg class="llm-insight-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                  </svg>
+                  <span class="llm-insight-title">AI Contextual Insights</span>
+                </div>
+                <div class="llm-insight-body" id="llm-insight-body"></div>
+              </div>
+              
+              <ol class="result-cards" id="result-cards" aria-label="Search results"></ol>
+            </div>
+
+            <aside class="neurosymbolic-dashboard" id="neurosymbolic-dashboard" hidden>
+              <div class="dashboard-section session-info">
+                <h3 class="dashboard-section-title">Session Context</h3>
+                <div class="session-meta">
+                  <div class="meta-row">
+                    <span class="meta-label">ID:</span>
+                    <span class="meta-value" id="session-id-display">—</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-label">Complexity:</span>
+                    <span class="meta-value" id="complexity-display">0.000</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-label">Modulation:</span>
+                    <span class="meta-value" id="modulation-display">0.000</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="dashboard-section symptoms-section">
+                <h3 class="dashboard-section-title">Session Concepts</h3>
+                <div class="symptom-badges" id="symptom-badges">
+                  <span class="no-features-text">No concepts detected yet.</span>
+                </div>
+              </div>
+              
+              <div class="dashboard-section path-section">
+                <h3 class="dashboard-section-title">KG Traversal Paths</h3>
+                <div class="path-tracer" id="path-tracer">
+                  <span class="no-paths-text">No path traversed yet.</span>
+                </div>
+              </div>
+              
+              <div class="dashboard-section workflow-section" id="dashboard-workflow-section" hidden>
+                <h3 class="dashboard-section-title">Procedural Workflow</h3>
+                <ul class="workflow-steps-list" id="workflow-steps-list">
+                  <!-- Steps rendered here -->
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <!-- ── Ingest Panel ─────────────────────────────────────────── -->
+    <div class="panel" id="panel-ingest" role="tabpanel" aria-labelledby="nav-ingest" hidden>
+
+      <header class="panel-header">
+        <h1 class="panel-title">Ingest PDF Document</h1>
+        <p class="panel-subtitle">Upload a PDF to extract text, generate embeddings, and add it to the search corpus.</p>
+      </header>
+
+      <div class="ingest-layout">
+
+        <!-- Drop zone -->
+        <div class="dropzone-wrapper">
+          <label class="dropzone" id="dropzone" for="file-input" tabindex="0"
+            ondragover="handleDragOver(event)"
+            ondragleave="handleDragLeave(event)"
+            ondrop="handleDrop(event)"
+            onkeydown="if(event.key==='Enter'||event.key===' '){document.getElementById('file-input').click()}"
+            aria-describedby="dropzone-hint">
+            <div class="dropzone-content" id="dropzone-content">
+              <div class="dropzone-icon" aria-hidden="true">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <polyline points="12 18 12 12"/><polyline points="9 15 12 12 15 15"/>
+                </svg>
+              </div>
+              <p class="dropzone-primary">Drop a PDF here</p>
+              <p class="dropzone-secondary" id="dropzone-hint">or click to browse — max 20 MB</p>
+            </div>
+            <div class="dropzone-file-preview" id="dropzone-file-preview" hidden>
+              <div class="file-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
+              <div class="file-info">
+                <span class="file-name" id="file-name-display"></span>
+                <span class="file-size" id="file-size-display"></span>
+              </div>
+              <button type="button" class="file-remove" id="file-remove-btn" aria-label="Remove selected file" onclick="clearFile(event)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </label>
+          <input type="file" id="file-input" accept=".pdf,application/pdf" class="sr-only" aria-label="Select PDF file" onchange="handleFileSelect(event)" />
+        </div>
+
+        <!-- Metadata form -->
+        <form class="ingest-form" id="ingest-form" onsubmit="handleIngest(event)" novalidate>
+          <h2 class="form-section-title">Document Metadata</h2>
+
+          <div class="form-field">
+            <label class="form-label" for="domain-select">Domain <span class="required" aria-hidden="true">*</span></label>
+            <select id="domain-select" name="domain" class="form-select" required aria-required="true">
+              <option value="" disabled selected>Select a domain…</option>
+              <option value="tech">Technology & AI</option>
+              <option value="legal">Legal & Regulatory</option>
+              <option value="health">Health & Medicine</option>
+              <option value="business">Business & Finance</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="year-input">Publication Year</label>
+            <input type="number" id="year-input" name="year" class="form-input"
+              min="1900" max="2099" value="2024"
+              aria-describedby="year-hint" />
+            <p class="form-hint" id="year-hint">Used to boost recency scores in search.</p>
+          </div>
+
+          <div class="form-field">
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <label class="form-label" for="verified-toggle">Authoritative source</label>
+                <p class="form-hint">Verified documents receive a ranking boost when users request them.</p>
+              </div>
+              <button type="button" class="toggle" id="verified-toggle" role="switch"
+                aria-checked="false" onclick="toggleVerified(this)">
+                <span class="toggle-knob" aria-hidden="true"></span>
+                <span class="sr-only">Mark as verified</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress / feedback -->
+          <div class="ingest-progress" id="ingest-progress" hidden aria-live="polite" role="status">
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <span class="progress-label" id="progress-label">Processing…</span>
+          </div>
+
+          <div class="ingest-success" id="ingest-success" hidden role="status" aria-live="polite">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="success-message"></span>
+          </div>
+
+          <div class="ingest-error" id="ingest-error" hidden role="alert" aria-live="assertive">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span id="ingest-error-message"></span>
+          </div>
+
+          <button type="submit" class="btn-primary" id="ingest-submit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Ingest Document
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Result card template (cloned in JS) -->
+<template id="result-card-template">
+  <li class="result-card">
+    <div class="result-card-header">
+      <div class="result-title-row">
+        <h3 class="result-title"></h3>
+        <div class="result-badges"></div>
+      </div>
+      <div class="result-rank"></div>
+    </div>
+    <p class="result-excerpt"></p>
+    <div class="score-block">
+      <div class="score-row" title="Combined fused score">
+        <span class="score-label">Final</span>
+        <div class="score-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="score-bar-fill final"></div>
+        </div>
+        <span class="score-value final-val"></span>
+      </div>
+      <div class="score-row" title="BM25 keyword relevance score">
+        <span class="score-label">BM25</span>
+        <div class="score-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="score-bar-fill bm25"></div>
+        </div>
+        <span class="score-value bm25-val"></span>
+      </div>
+      <div class="score-row" title="Semantic vector similarity score">
+        <span class="score-label">Vector</span>
+        <div class="score-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="score-bar-fill vector"></div>
+        </div>
+        <span class="score-value vector-val"></span>
+      </div>
+    </div>
+    <div class="result-why"></div>
+  </li>
+</template>
+
+<script src="/static/app.js?v=2"></script>
+</body>
+</html>
