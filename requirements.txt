@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+psycopg2-binary
+sqlalchemy
+pgvector
+sentence-transformers
+rank_bm25
+python-dotenv
+httpx
+numpy
+pymupdf
+python-multipart
+pytest
+anyio
